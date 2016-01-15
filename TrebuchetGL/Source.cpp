@@ -6,6 +6,13 @@
  * Na podstawie pliku przyk³adowego z laboratorium
  */
 
+// angle of rotation for the camera direction
+float angle=0.0;
+// actual vector representing the camera's direction
+float lx=0.0f,lz=-1.0f;
+// XZ position of the camera
+float x=0.0f,z=5.0f;
+
 #include <windows.h>
 #include <GL/gl.h>
 #include "GLUT.H"
@@ -91,10 +98,21 @@ void display()
 	//czyszczenie bufora koloru i bufora g³êbokoœci, by namalowaæ nowe
 	glClear( GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT );
 
+	// Reset transformations
+	glLoadIdentity();
+	// Set the camera
+	
+
+gluLookAt(	x, 1.0f, z,
+			x+lx, 1.0f,  z+lz,
+			0.0f, 1.0f,  0.0f);
+
+
 
 
 	if (frame_no==360) frame_no=0;
 	frame_no++;
+
 	//w³asna funckja wyœwietlaj¹ca scenê
 	displayObjects(frame_no);
 
@@ -108,21 +126,24 @@ void display()
 void reshape(GLsizei w, GLsizei h)
 {
 	glutReshapeWindow(WINDOW_WIDTH, WINDOW_HEIGHT);
-	/*if( h > 0 && w > 0 )
-	{
-		glViewport( 0, 0, w, h );
-		glMatrixMode( GL_PROJECTION );
-		glLoadIdentity();
-		if( w <= h )
-		{
-			glOrtho( -2.25, 2.25, -2.25*h/w, 2.25*h/w, -10.0, 10.0 );
-		}
-		else
-		{
-			glOrtho( -2.25*w/h, 2.25*w/h, -2.25, 2.25, -10.0, 10.0 );
-		}
-     glMatrixMode( GL_MODELVIEW );
-     }*/
+
+
+	float ratio = w * 1.0 / h;
+
+	 // Use the Projection Matrix
+glMatrixMode(GL_PROJECTION);
+
+// Reset Matrix
+glLoadIdentity();
+
+// Set the viewport to be the entire window
+glViewport(0, 0, w, h);
+
+// Set the correct perspective.
+gluPerspective(45.0f, ratio, 0.1f, 100.0f);
+
+// Get Back to the Modelview
+glMatrixMode(GL_MODELVIEW);
 }
 
 /*
@@ -168,16 +189,35 @@ void KeyPressedFunc(unsigned char key, int kx, int ky)
 {
 	std::cout<<"keypressed";
 
-		glViewport( 0, 0, WINDOW_WIDTH, WINDOW_HEIGHT );
+		/*glViewport( 0, 0, WINDOW_WIDTH, WINDOW_HEIGHT );
 		glMatrixMode( GL_PROJECTION );
 		glLoadIdentity();
 
+		glOrtho(-2.25,2.25,-2.25,2.25,-10.0, 10.0 );
+     glMatrixMode( GL_MODELVIEW );*/
 
+		float fraction = 0.1f;
 
-
-			glOrtho( -2.25*WINDOW_WIDTH/WINDOW_HEIGHT, 2.25*WINDOW_WIDTH/WINDOW_HEIGHT, -2.25, 2.25, -10.0, 10.0 );
-
-     glMatrixMode( GL_MODELVIEW );
+	switch (key) {
+		case 'a' :
+			angle -= 0.01f;
+			lx = sin(angle);
+			lz = -cos(angle);
+			break;
+		case 'd' :
+			angle += 0.01f;
+			lx = sin(angle);
+			lz = -cos(angle);
+			break;
+		case 'w' :
+			x += lx * fraction;
+			z += lz * fraction;
+			break;
+		case 's' :
+			x -= lx * fraction;
+			z -= lz * fraction;
+			break;
+	}
 }
 
 
