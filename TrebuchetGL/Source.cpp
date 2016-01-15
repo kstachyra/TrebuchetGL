@@ -15,6 +15,9 @@
 #define FRAME_RATE 60
 #define REFRESH_TIME 1000/FRAME_RATE
 
+#define WINDOW_WIDTH 500
+#define WINDOW_HEIGHT 500
+
 void init()
 {
 	GLfloat mat_ambient[]    = { 1.0, 1.0,  1.0, 1.0 };
@@ -88,6 +91,8 @@ void display()
 	//czyszczenie bufora koloru i bufora g³êbokoœci, by namalowaæ nowe
 	glClear( GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT );
 
+
+
 	if (frame_no==360) frame_no=0;
 	frame_no++;
 	//w³asna funckja wyœwietlaj¹ca scenê
@@ -102,7 +107,8 @@ void display()
 
 void reshape(GLsizei w, GLsizei h)
 {
-	if( h > 0 && w > 0 )
+	glutReshapeWindow(WINDOW_WIDTH, WINDOW_HEIGHT);
+	/*if( h > 0 && w > 0 )
 	{
 		glViewport( 0, 0, w, h );
 		glMatrixMode( GL_PROJECTION );
@@ -116,31 +122,65 @@ void reshape(GLsizei w, GLsizei h)
 			glOrtho( -2.25*w/h, 2.25*w/h, -2.25, 2.25, -10.0, 10.0 );
 		}
      glMatrixMode( GL_MODELVIEW );
-     }
+     }*/
 }
 
+/*
+wywo³anie funkcji powoduje zawieszenie programu do momentu, a¿ od ostatniego wywo³ania tej funkcji minie REFRESH_TIME
+do wywo³ywania przed funkcj¹ glutPostRedisplay();
+*/
 void nextFrameWait(int* frameTime)
 {
-	int currentTime;
-	do
-	{
-		currentTime = glutGet(GLUT_ELAPSED_TIME);
-	} while (currentTime - *frameTime < REFRESH_TIME);
+	/*wersja z aktywnym oczekiwaniem
+	while (glutGet(GLUT_ELAPSED_TIME) - *frameTime < REFRESH_TIME);
+	*frameTime = glutGet(GLUT_ELAPSED_TIME);
+	*/
 
-	*frameTime = glutGet(GLUT_ELAPSED_TIME);;
+	/*wersja ze Sleep pomiêdzy klatkami*/
+	int toWait = REFRESH_TIME - (glutGet(GLUT_ELAPSED_TIME) - *frameTime);
+	if (toWait>0)
+	{
+		Sleep(toWait);
+	}
+
+	*frameTime = glutGet(GLUT_ELAPSED_TIME);
 }
 
+/*
+funkcja wywo³ywana w pêtli, gdy nie ma nic innego do zrobienia
+tutaj znajduje siê obliczanie stanu ca³ej sceny i jej rysowanie
+*/
 void idleFunc()
 {
-	//mierz czas
 	static int frameTime = glutGet(GLUT_ELAPSED_TIME);
 
-	//funkcja do obliczeñ i wszystkiego
-
+	//todo wywo³anie funkcja do obliczeñ sceny i wszystkiego
 
 	nextFrameWait(&frameTime);
 	glutPostRedisplay();
 }
+
+/*
+funkcja wywo³ywana po naciœniêciu przycisku klawiatury
+s³u¿y do obracania kamery i manipulowania wszelkimi parametrami symulacji
+*/
+void KeyPressedFunc(unsigned char key, int kx, int ky)
+{
+	std::cout<<"keypressed";
+
+		glViewport( 0, 0, WINDOW_WIDTH, WINDOW_HEIGHT );
+		glMatrixMode( GL_PROJECTION );
+		glLoadIdentity();
+
+
+
+
+			glOrtho( -2.25*WINDOW_WIDTH/WINDOW_HEIGHT, 2.25*WINDOW_WIDTH/WINDOW_HEIGHT, -2.25, 2.25, -10.0, 10.0 );
+
+     glMatrixMode( GL_MODELVIEW );
+}
+
+
 
 int main(int argc, char** argv)
 {
@@ -148,7 +188,7 @@ int main(int argc, char** argv)
 	glutInitDisplayMode( GLUT_DOUBLE | GLUT_RGBA | GLUT_DEPTH );
 
 	glutInitWindowPosition( 100, 100 );
-	glutInitWindowSize( 500, 500 );
+	glutInitWindowSize(WINDOW_WIDTH, WINDOW_HEIGHT);
 
 	glutCreateWindow( "TrebuchetGL - Kacper Stachyra 2016" );
 
@@ -157,6 +197,9 @@ int main(int argc, char** argv)
 
 	//funkcja wywo³ywana przy zmianie rozmiaru okna
 	glutReshapeFunc( reshape );
+
+	//funkcja wywo³ywana przy naciœniêciu klawisza zwyk³ego
+	glutKeyboardFunc( KeyPressedFunc );
 
 	//funkcja wywo³ywana w stanie spoczynku
 	glutIdleFunc( idleFunc );
