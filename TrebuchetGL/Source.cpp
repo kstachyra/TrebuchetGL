@@ -6,13 +6,6 @@
  * Na podstawie pliku przyk³adowego z laboratorium
  */
 
-// angle of rotation for the camera direction
-float angle=0.0;
-// actual vector representing the camera's direction
-float lx=0.0f,lz=-1.0f;
-// XZ position of the camera
-float x=0.0f,z=5.0f;
-
 #include <windows.h>
 #include <GL/gl.h>
 #include "GLUT.H"
@@ -24,6 +17,17 @@ float x=0.0f,z=5.0f;
 
 #define WINDOW_WIDTH 500
 #define WINDOW_HEIGHT 500
+
+#define M_PI 3.1415926535897932384626433832795
+
+double verticalAngle = M_PI;
+double horizontalAngle = M_PI/2;
+double step = 0.1;
+double angleStep = 0.1;
+
+double lookX = 0, lookY = 0, lookZ = -1;
+double cameraX = 0, cameraY = 1, cameraZ = 5;
+double upX = 0, upY = 1, upZ = 0;
 
 void init()
 {
@@ -71,6 +75,7 @@ void displayObjects(int frame_no)
             glRotatef( frame_no, 1.0, 0.0, 0.0 );
             glMaterialfv( GL_FRONT, GL_DIFFUSE, cube_diffuse );
             glutSolidCube( 1.5 );
+		  //glutSolidTeapot(1.5);
          glPopMatrix();
 
          glPushMatrix();
@@ -89,7 +94,7 @@ void displayObjects(int frame_no)
 	        gluCylinder(quadric, 0.5, 0.5, 1, 5, 5);
          glPopMatrix();
 
-   glPopMatrix();	 
+   glPopMatrix();
 }
 
 void display()
@@ -103,9 +108,9 @@ void display()
 	// Set the camera
 	
 
-gluLookAt(	x, 1.0f, z,
-			x+lx, 1.0f,  z+lz,
-			0.0f, 1.0f,  0.0f);
+gluLookAt(	cameraX, cameraY, cameraZ,
+			cameraX+lookX, cameraY+lookY, cameraZ+lookZ,
+			upX, upY,  upZ);
 
 
 
@@ -125,25 +130,16 @@ gluLookAt(	x, 1.0f, z,
 
 void reshape(GLsizei w, GLsizei h)
 {
+	//"blokowanie" zmiany rozmiaru okna
 	glutReshapeWindow(WINDOW_WIDTH, WINDOW_HEIGHT);
 
-
+	//ustawianie vieport i perspektywy widoku wzglêdem rozmiaru okna
 	float ratio = w * 1.0 / h;
-
-	 // Use the Projection Matrix
-glMatrixMode(GL_PROJECTION);
-
-// Reset Matrix
-glLoadIdentity();
-
-// Set the viewport to be the entire window
-glViewport(0, 0, w, h);
-
-// Set the correct perspective.
-gluPerspective(45.0f, ratio, 0.1f, 100.0f);
-
-// Get Back to the Modelview
-glMatrixMode(GL_MODELVIEW);
+	glMatrixMode(GL_PROJECTION);
+	glLoadIdentity();
+	glViewport(0, 0, w, h);
+	gluPerspective(45.0f, ratio, 0.1f, 100.0f);
+	glMatrixMode(GL_MODELVIEW);
 }
 
 /*
@@ -187,8 +183,6 @@ s³u¿y do obracania kamery i manipulowania wszelkimi parametrami symulacji
 */
 void KeyPressedFunc(unsigned char key, int kx, int ky)
 {
-	std::cout<<"keypressed";
-
 		/*glViewport( 0, 0, WINDOW_WIDTH, WINDOW_HEIGHT );
 		glMatrixMode( GL_PROJECTION );
 		glLoadIdentity();
@@ -196,28 +190,75 @@ void KeyPressedFunc(unsigned char key, int kx, int ky)
 		glOrtho(-2.25,2.25,-2.25,2.25,-10.0, 10.0 );
      glMatrixMode( GL_MODELVIEW );*/
 
-		float fraction = 0.1f;
+		/*x = r * sin(phi) * cos(theta)
+		y = r * sin(phi) * sin(theta)
+		z = r * cos(phi)*/
 
-	switch (key) {
-		case 'a' :
-			angle -= 0.01f;
-			lx = sin(angle);
-			lz = -cos(angle);
+	switch (key)
+	{
+		case 'q' :
+			horizontalAngle -= angleStep;
 			break;
-		case 'd' :
-			angle += 0.01f;
-			lx = sin(angle);
-			lz = -cos(angle);
+		case 'e' :
+			horizontalAngle += angleStep;
 			break;
+
+		case 'r' :
+			verticalAngle += angleStep;
+			break;
+
+		case 'f' :
+			verticalAngle -= angleStep;
+			break;
+
 		case 'w' :
-			x += lx * fraction;
-			z += lz * fraction;
+			cameraX += lookX * step;
+			cameraY += lookY * step;
+			cameraZ += lookZ * step;
 			break;
 		case 's' :
-			x -= lx * fraction;
-			z -= lz * fraction;
+			cameraX -= lookX * step;
+			cameraY -= lookY * step;
+			cameraZ -= lookZ * step;
+			break;
+		case 'a' :
+			cameraX += lookX * step;
+
+			cameraZ += lookZ * step;
+			break;
+		case 'd' :
+			cameraX -= lookX * step;
+
+			cameraZ -= lookZ * step;
 			break;
 	}
+	/*if (verticalAngle > M_PI) verticalAngle = M_PI;
+	else if (verticalAngle < 0) verticalAngle = 0;
+
+	if (horizontalAngle >= 2*M_PI) horizontalAngle = 0;
+	else if (horizontalAngle <= 0) horizontalAngle = 2*M_PI;*/
+
+
+	lookZ = cos(verticalAngle) * sin(horizontalAngle);
+	lookX = cos(verticalAngle) * cos(horizontalAngle);
+	lookY = sin(verticalAngle);
+
+	verticalAngle -= M_PI/2;
+
+	lookZ = cos(verticalAngle) * sin(horizontalAngle);
+	lookX = cos(verticalAngle) * cos(horizontalAngle);
+	lookY = sin(verticalAngle);
+
+	verticalAngle += M_PI/2;
+
+
+
+
+
+	std::cout.precision(2);
+	std::cout<<cameraX<<"___"<<cameraY<<"___"<<cameraZ<<"___"<<lookX<<"___"<<lookY<<"___"<<lookZ<<"\n";
+	std::cout<<lookX*lookX+lookY*lookY+lookZ*lookZ<<"\n";
+	
 }
 
 
