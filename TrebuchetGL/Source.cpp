@@ -18,15 +18,25 @@
 #define WINDOW_WIDTH 500
 #define WINDOW_HEIGHT 500
 
-#define M_PI 3.1415926535897932384626433832795
+//d³ugoœæ belki podpieraj¹cej
+#define BASE_LEN 2.5
+//szerokoœæ belki podpieraj¹cej
+#define BASE_THICK 0.1
+//rozstaw belek podpieraj¹cych
+#define TREB_WID 2
 
-double verticalAngle = M_PI;
-double horizontalAngle = M_PI/2;
+#define M_PI 3.1415926535897932384626433832795
+#define SQRT_2 1.41421356237
+#define SQRT_3 1.73205080757
+#define EPSILON 0.001
+
+double verticalAngle = 0;
+double horizontalAngle = M_PI*3/2;
 double step = 0.1;
 double angleStep = 0.1;
 
 double lookX = 0, lookY = 0, lookZ = -1;
-double cameraX = 0, cameraY = 1, cameraZ = 5;
+double cameraX = 0, cameraY = 0, cameraZ = 5;
 double upX = 0, upY = 1, upZ = 0;
 
 void init()
@@ -51,72 +61,102 @@ void init()
 	glEnable( GL_DEPTH_TEST );
 }
 
+void drawPodst()
+{
+	//lewa podstawa
+	glPushMatrix();
+	glTranslatef(-TREB_WID/2, BASE_LEN*SQRT_3/2 + BASE_THICK, 0);
+	glRotatef(60, 1, 0, 0);
+
+	GLUquadric *quadric = gluNewQuadric();
+	gluCylinder(quadric, BASE_THICK, BASE_THICK, BASE_LEN, 16, 5);
+	glTranslatef(0, 0, BASE_LEN);
+	gluSphere(quadric, BASE_THICK, 16, 5);
+	glTranslatef(0, 0, -BASE_LEN);
+
+	glRotatef(60, 1, 0, 0);
+	gluSphere(quadric, BASE_THICK, 16, 5);
+	gluCylinder(quadric, BASE_THICK, BASE_THICK, BASE_LEN, 16, 5);
+	gluSphere(quadric, BASE_THICK, 16, 5);
+	glTranslatef(0, 0, BASE_LEN);
+	gluSphere(quadric, BASE_THICK, 16, 5);
+	glPopMatrix();
+
+	//prawa podstawa
+	glPushMatrix();
+	glTranslatef(TREB_WID/2, BASE_LEN*SQRT_3/2 + BASE_THICK, 0);
+	glRotatef(60, 1, 0, 0);
+
+	gluCylinder(quadric, BASE_THICK, BASE_THICK, BASE_LEN, 16, 5);
+	glTranslatef(0, 0, BASE_LEN);
+	gluSphere(quadric, BASE_THICK, 16, 5);
+	glTranslatef(0, 0, -BASE_LEN);
+
+	glRotatef(60, 1, 0, 0);
+	gluSphere(quadric, BASE_THICK, 16, 5);
+	gluCylinder(quadric, BASE_THICK, BASE_THICK, BASE_LEN, 16, 5);
+	gluSphere(quadric, BASE_THICK, 16, 5);
+	glTranslatef(0, 0, BASE_LEN);
+	gluSphere(quadric, BASE_THICK, 16, 5);
+	glPopMatrix();
+
+	//belka poprzeczna
+	glPushMatrix();
+	glTranslatef(0, BASE_LEN*SQRT_3/2 + BASE_THICK, 0);
+	glRotatef(90, 0, 1, 0);
+	glTranslatef(0, 0, -TREB_WID/2);
+	gluCylinder(quadric, BASE_THICK, BASE_THICK, TREB_WID, 16, 5);
+	glPopMatrix();
+
+
+
+}
+
 void displayObjects(int frame_no)
 {
-	GLfloat torus_diffuse[]  = { 0.7, 0.7, 0.0, 1.0 };
 	GLfloat cube_diffuse[]   = { 0.0, 0.7, 0.7, 1.0 };
-	GLfloat sphere_diffuse[] = { 0.7, 0.0, 0.7, 1.0 };
-	GLfloat octa_diffuse[]   = { 0.7, 0.4, 0.4, 1.0 };
 
+	drawPodst();
 	glPushMatrix();
-
-	glRotatef( 30.0, 1.0, 0.0, 0.0 );
-
-          glPushMatrix();
-             glTranslatef( -0.80, 0.35, 0.0 ); 
-             glRotatef( 100.0, 1.0, 0.0, 0.0 );
-             glMaterialfv( GL_FRONT, GL_DIFFUSE, torus_diffuse );
-             glutSolidTorus( 0.275, 0.85, 10, 10 );
-          glPopMatrix();
-
-         glPushMatrix();
-            glTranslatef( -0.75, -0.50, 0.0 ); 
-            glRotatef( 45.0, 0.0, 0.0, 1.0 );
             glRotatef( frame_no, 1.0, 0.0, 0.0 );
             glMaterialfv( GL_FRONT, GL_DIFFUSE, cube_diffuse );
-            glutSolidCube( 1.5 );
+		  GLUquadric *quadric = gluNewQuadric();
+		  gluCylinder(quadric, 0.5, 0.5, 1, 5, 500);
+            //glutSolidCube( 1.5 );
 		  //glutSolidTeapot(1.5);
-         glPopMatrix();
+	glPopMatrix();
 
-         glPushMatrix();
-             glTranslatef( 0.75, 0.60, 0.0 ); 
-             glRotatef( 30.0, 1.0, 0.0, 0.0 );
-	     glMaterialfv( GL_FRONT, GL_DIFFUSE, sphere_diffuse );
-             glutSolidSphere( 1.0, 10, 10 );
-         glPopMatrix();
-
-	    GLUquadric *quadric = gluNewQuadric();
-
-         glPushMatrix();
-		  glRotatef( 30.0, 1.0, 0.0, 0.0 );
-            glTranslatef( 0.70, -0.90, 0.25 ); 
-            //glMaterialfv( GL_FRONT, GL_DIFFUSE, octa_diffuse );
-	        gluCylinder(quadric, 0.5, 0.5, 1, 5, 5);
-         glPopMatrix();
-
-   glPopMatrix();
+	glBegin(GL_QUADS);
+		glVertex3f(-100, 0, -100);
+		glVertex3f(-100, 0, 100);
+		glVertex3f(100, 0, 100);
+		glVertex3f(100, 0, -100);
+	glEnd();
 }
 
 void display()
 {
 	static int frame_no = 0;
+
+	if (frame_no==360) frame_no=0;
+	frame_no++;
+
+
 	//czyszczenie bufora koloru i bufora g³êbokoœci, by namalowaæ nowe
 	glClear( GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT );
 
 	// Reset transformations
 	glLoadIdentity();
-	// Set the camera
 	
 
-gluLookAt(	cameraX, cameraY, cameraZ,
+	gluLookAt(cameraX, cameraY, cameraZ,
 			cameraX+lookX, cameraY+lookY, cameraZ+lookZ,
 			upX, upY,  upZ);
 
 
 
 
-	if (frame_no==360) frame_no=0;
-	frame_no++;
+	
 
 	//w³asna funckja wyœwietlaj¹ca scenê
 	displayObjects(frame_no);
@@ -131,7 +171,7 @@ gluLookAt(	cameraX, cameraY, cameraZ,
 void reshape(GLsizei w, GLsizei h)
 {
 	//"blokowanie" zmiany rozmiaru okna
-	glutReshapeWindow(WINDOW_WIDTH, WINDOW_HEIGHT);
+	/*glutReshapeWindow(WINDOW_WIDTH, WINDOW_HEIGHT);*/
 
 	//ustawianie vieport i perspektywy widoku wzglêdem rozmiaru okna
 	float ratio = w * 1.0 / h;
@@ -143,7 +183,7 @@ void reshape(GLsizei w, GLsizei h)
 }
 
 /*
-wywo³anie funkcji powoduje zawieszenie programu do momentu, a¿ od ostatniego wywo³ania tej funkcji minie REFRESH_TIME
+wywo³anie funkcji nexFrameWait powoduje zawieszenie programu do momentu, a¿ od ostatniego wywo³ania tej funkcji minie REFRESH_TIME
 do wywo³ywania przed funkcj¹ glutPostRedisplay();
 */
 void nextFrameWait(int* frameTime)
@@ -222,46 +262,44 @@ void KeyPressedFunc(unsigned char key, int kx, int ky)
 			cameraZ -= lookZ * step;
 			break;
 		case 'a' :
-			cameraX += lookX * step;
-
-			cameraZ += lookZ * step;
+			cameraX -= (lookY*upZ - lookZ*upY) * step;
+			cameraY -= (lookZ*upX - lookX*upZ) * step;
+			cameraZ -= (lookX*upY - lookY*upX) * step;
 			break;
 		case 'd' :
-			cameraX -= lookX * step;
-
-			cameraZ -= lookZ * step;
+			cameraX += (lookY*upZ - lookZ*upY) * step;
+			cameraY += (lookZ*upX - lookX*upZ) * step;
+			cameraZ += (lookX*upY - lookY*upX) * step;
 			break;
 	}
-	/*if (verticalAngle > M_PI) verticalAngle = M_PI;
-	else if (verticalAngle < 0) verticalAngle = 0;
+
+	/*ograniczenie zmiany k¹tów widzenia*/
+	if (verticalAngle < -M_PI/2) verticalAngle = -M_PI/2;
+	else if (verticalAngle > M_PI/2) verticalAngle = M_PI/2;
 
 	if (horizontalAngle >= 2*M_PI) horizontalAngle = 0;
-	else if (horizontalAngle <= 0) horizontalAngle = 2*M_PI;*/
+	else if (horizontalAngle <= 0) horizontalAngle = 2*M_PI;
 
-
+	/*obliczenia wektorwa look*/
 	lookZ = cos(verticalAngle) * sin(horizontalAngle);
 	lookX = cos(verticalAngle) * cos(horizontalAngle);
 	lookY = sin(verticalAngle);
 
+	/*obliczanie wektora up*/
+	verticalAngle += M_PI/2;
+	upZ = cos(verticalAngle) * sin(horizontalAngle);
+	upX = cos(verticalAngle) * cos(horizontalAngle);
+	upY = sin(verticalAngle);
 	verticalAngle -= M_PI/2;
 
-	lookZ = cos(verticalAngle) * sin(horizontalAngle);
-	lookX = cos(verticalAngle) * cos(horizontalAngle);
-	lookY = sin(verticalAngle);
-
-	verticalAngle += M_PI/2;
-
-
-
-
-
+	/*wypisywanie logów do konsoli*/
 	std::cout.precision(2);
-	std::cout<<cameraX<<"___"<<cameraY<<"___"<<cameraZ<<"___"<<lookX<<"___"<<lookY<<"___"<<lookZ<<"\n";
+	std::cout<<"camera: "<<cameraX<<", "<<cameraY<<", "<<cameraZ<<"\t look: "<<lookX<<", "<<lookY<<", "<<lookZ<<"\n";
+	std::cout<<"up: "<<upX<<", "<<upY<<", "<<upZ<<"\n";
+	std::cout<<"V: "<<verticalAngle<<"\tH:"<<horizontalAngle<<"\n";
 	std::cout<<lookX*lookX+lookY*lookY+lookZ*lookZ<<"\n";
 	
 }
-
-
 
 int main(int argc, char** argv)
 {
