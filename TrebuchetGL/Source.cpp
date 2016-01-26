@@ -10,12 +10,14 @@
 #include <GL/gl.h>
 #include "GLUT.H"
 
+#include <SOIL.h>
+
 #include <iostream>
 
 #define FRAME_RATE 60
 #define REFRESH_TIME 1000/FRAME_RATE
 
-#define WINDOW_WIDTH 500
+#define WINDOW_WIDTH 1000
 #define WINDOW_HEIGHT 500
 
 //d³ugoœæ belki podpieraj¹cej
@@ -24,20 +26,118 @@
 #define BASE_THICK 0.1
 //rozstaw belek podpieraj¹cych
 #define TREB_WID 2
+//gêstoœæ belek
+#define BASE_MASS 1
+//grawitacja
+#define GRAVITY 0.5
+//tarcie
+#define FRICTION 1
 
 #define M_PI 3.1415926535897932384626433832795
 #define SQRT_2 1.41421356237
 #define SQRT_3 1.73205080757
-#define EPSILON 0.001
+#define TO_RADIAN 0.0174532925
 
-double verticalAngle = 0;
-double horizontalAngle = M_PI*3/2;
-double step = 0.1;
-double angleStep = 0.1;
+float step = 0.1;
+float angleStep = 0.1;
 
-double lookX = 0, lookY = 0, lookZ = -1;
-double cameraX = 0, cameraY = 0, cameraZ = 5;
-double upX = 0, upY = 1, upZ = 0;
+float verticalAngle = 0;
+float horizontalAngle = M_PI*3/2;
+
+
+float lookX = 0, lookY = 0, lookZ = -1;
+float cameraX = 0, cameraY = 1, cameraZ = 5;
+float upX = 0, upY = 1, upZ = 0;
+float payloadX = 0, payloadY = 0, payloadZ = 0;
+
+//wielkoœæ i masa pocisku
+float payloadSize = 1, payloadMass = 10;
+//wielkoœæ i masa przeciwwagi
+float counterSize = 1, counterMass = 100;
+//d³ugoœci ramienia miotaj¹cego i ograniczenia
+float r1 = 3, r2 = 2.2;
+float minr1, minr2;
+//kat obrotu ramienia miotaj¹cego w stopniach(!) i ograniczenia
+float beamAngle = 0;
+float minBeamAngle;
+float maxBeamAngle;
+
+bool thrown = 0;
+bool launched = 0;
+
+float mv[16];
+
+
+
+/*funkcja inicjuj¹ca, w³¹cza potrzebne funkcje openGL, uruchamiana raz*/
+void init();
+
+/*funkcja wyœwietlaj¹ca klatkê, wywo³yje funkcje rysowania, zamienia bufory, ustawia macierz VIEW itd.*/
+void display();
+
+/*funkcja zapewniaj¹ca poprawnoœæ przy zmianie rozmiaru okna, tworzy poprawn¹ macierz PROJECTION*/
+void reshape(GLsizei w, GLsizei h);
+
+/*rysowanie wszystkich obiektów - wywo³uje drawTrebuchet, drawPayload*/
+void displayObjects(int frame_no);
+	/*rysowanie trebusza*/
+	void drawTrebuchet();
+	/*rysowanie pocisku*/
+	void drawPayload();
+
+/*funkcja s³u¿¹ca do "odzyskiwania" macierzy MODEL dla przekszta³ceñ pocisku, powtórzone przekszta³cenia macierzy z funkcji
+drawPayload, z wy³¹czeniem macierzy VIEW (gluLookAt), wywo³ywana raz, gdy potrzebna - wa¿ne, pilnowaæ takich samych przekszta³ceñ!*/
+void getPayloadMatrix();
+
+/*
+wywo³anie funkcji nexFrameWait powoduje zawieszenie programu do momentu, a¿ od ostatniego wywo³ania tej funkcji minie REFRESH_TIME
+do wywo³ywania przed funkcj¹ glutPostRedisplay();
+*/
+void nextFrameWait(int* frameTime);
+
+/*
+funkcja wywo³ywana w pêtli, gdy nie ma nic innego do zrobienia
+tutaj znajduje siê obliczanie stanu ca³ej sceny i jej rysowanie
+*/
+void idleFunc();
+
+/*obliczanie fizyki animacji, wywo³ywana z idleFunc*/
+void calcPhysics();
+
+/*
+funkcja wywo³ywana po naciœniêciu przycisku klawiatury
+s³u¿y do obracania kamery i manipulowania parametrami symulacji
+*/
+void KeyPressedFunc(unsigned char key, int kx, int ky);
+
+int main(int argc, char** argv)
+{
+	glutInit( &argc, argv );
+	glutInitDisplayMode( GLUT_DOUBLE | GLUT_RGBA | GLUT_DEPTH );
+
+	glutInitWindowPosition( 300, 300 );
+	glutInitWindowSize(WINDOW_WIDTH, WINDOW_HEIGHT);
+
+	glutCreateWindow( "TrebuchetGL - Kacper Stachyra 2016" );
+
+	//funkcja s³u¿¹ca do odrysowania okna, uruchamiana tylko w sytuacjach, gdy okno siê zmienia (rozmiar, widocznoœæ itd.)
+	glutDisplayFunc( display );
+
+	//funkcja wywo³ywana przy zmianie rozmiaru okna
+	glutReshapeFunc( reshape );
+
+	//funkcja wywo³ywana przy naciœniêciu klawisza zwyk³ego
+	glutKeyboardFunc( KeyPressedFunc );
+
+	//funkcja wywo³ywana w stanie spoczynku
+	glutIdleFunc( idleFunc );
+
+	init();
+
+	glutMainLoop();
+
+	return 0;
+}
 
 void init()
 {
@@ -61,9 +161,9 @@ void init()
 	glEnable( GL_DEPTH_TEST );
 }
 
-void drawPodst()
+void drawTrebuchet()
 {
-	//lewa podstawa
+	//lewa podstawa z ³¹czeniami
 	glPushMatrix();
 	glTranslatef(-TREB_WID/2, BASE_LEN*SQRT_3/2 + BASE_THICK, 0);
 	glRotatef(60, 1, 0, 0);
@@ -82,7 +182,7 @@ void drawPodst()
 	gluSphere(quadric, BASE_THICK, 16, 5);
 	glPopMatrix();
 
-	//prawa podstawa
+	//prawa podstawa z ³¹czeniami
 	glPushMatrix();
 	glTranslatef(TREB_WID/2, BASE_LEN*SQRT_3/2 + BASE_THICK, 0);
 	glRotatef(60, 1, 0, 0);
@@ -108,24 +208,79 @@ void drawPodst()
 	gluCylinder(quadric, BASE_THICK, BASE_THICK, TREB_WID, 16, 5);
 	glPopMatrix();
 
-
-
+	//ramiê wyrzucaj¹ce
+	glPushMatrix();
+	glTranslatef(0, BASE_LEN*SQRT_3/2 + BASE_THICK, 0);
+	glRotatef(beamAngle, 1, 0, 0);
+	glTranslatef(0, 0, -r2);
+		//³ycha wyrzucaj¹ca
+		glTranslatef(0, 0, +r1+r2);
+		//glutSolidTeapot(5*BASE_THICK);
+		const float throwSize = 5*BASE_THICK;
+		gluSphere(quadric, BASE_THICK, 16, 5);	//zakoñczenie ramienia
+		glTranslatef(0, 0, throwSize);		//przesuniêcie na sam koniec ramienia
+		glBegin(GL_QUADS);					//element wyrzucaj¹cy
+			glVertex3f(-throwSize, 0, -throwSize);
+			glVertex3f(-throwSize, 0, throwSize);
+			glVertex3f(throwSize, 0, throwSize);
+			glVertex3f(throwSize, 0, -throwSize);
+		glEnd();
+		glTranslatef(0, 0, -r1-r2-throwSize);	//"powrót" macierzy
+		//przeciwwaga
+		glTranslatef(0, counterSize/2, 0);
+		glutSolidCube(counterSize);
+		glTranslatef(0, -counterSize/2, 0);
+		//ramiê
+		gluCylinder(quadric, BASE_THICK, BASE_THICK, r1 + r2, 16, 5);
+	glPopMatrix();
 }
 
-void displayObjects(int frame_no)
+void drawPayload()
 {
-	GLfloat cube_diffuse[]   = { 0.0, 0.7, 0.7, 1.0 };
+	if(!thrown)
+	{
+		GLUquadric *quadric = gluNewQuadric();
+		glPushMatrix();
+	
+		glTranslatef(0, BASE_LEN*SQRT_3/2 + BASE_THICK, 0);
+		glRotatef(beamAngle, 1, 0, 0);
+		glTranslatef(0, 0, -r2);
+		glTranslatef(0, payloadSize,  5*BASE_THICK+r1+r2);
+	
+		gluSphere(quadric, payloadSize, 16, 5);
+		glPopMatrix();
+	}
+	else
+	{
+		GLUquadric *quadric = gluNewQuadric();
+		glPushMatrix();
+		glTranslatef(0, payloadY, payloadZ);
+		gluSphere(quadric, payloadSize, 16, 5);
+		glPopMatrix();
+	}
+}
 
-	drawPodst();
+/*funkcja s³u¿¹ca do "odzyskiwania" macierzy MODEL dla przekszta³ceñ pocisku, powtórzone przekszta³cenia macierzy z funkcji
+drawPayload, z wy³¹czeniem macierzy VIEW (gluLookAt), wywo³ywana raz, gdy potrzebna - wa¿ne, pilnowaæ takiego sameo kodu jw.*/
+void getPayloadMatrix()
+{
 	glPushMatrix();
-            glRotatef( frame_no, 1.0, 0.0, 0.0 );
-            glMaterialfv( GL_FRONT, GL_DIFFUSE, cube_diffuse );
-		  GLUquadric *quadric = gluNewQuadric();
-		  gluCylinder(quadric, 0.5, 0.5, 1, 5, 500);
-            //glutSolidCube( 1.5 );
-		  //glutSolidTeapot(1.5);
+	glLoadIdentity();
+	glTranslatef(0, BASE_LEN*SQRT_3/2 + BASE_THICK, 0);
+	glRotatef(beamAngle, 1, 0, 0);
+	glTranslatef(0, 0, -r2);
+	glTranslatef(0, payloadSize,  5*BASE_THICK+r1+r2);
+	glGetFloatv(GL_MODELVIEW_MATRIX, mv);
 	glPopMatrix();
+}
 
+
+void displayObjects()
+{
+	drawTrebuchet();
+	drawPayload();
+
+	//pod³o¿e
 	glBegin(GL_QUADS);
 		glVertex3f(-100, 0, -100);
 		glVertex3f(-100, 0, 100);
@@ -136,30 +291,19 @@ void displayObjects(int frame_no)
 
 void display()
 {
-	static int frame_no = 0;
-
-	if (frame_no==360) frame_no=0;
-	frame_no++;
-
-
 	//czyszczenie bufora koloru i bufora g³êbokoœci, by namalowaæ nowe
 	glClear( GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT );
 
-	// Reset transformations
+	//zerowanie macierzy MODELVIEW, na wszelki wypadek
 	glLoadIdentity();
 	
-
+	//ustawienie "kamery"
 	gluLookAt(cameraX, cameraY, cameraZ,
 			cameraX+lookX, cameraY+lookY, cameraZ+lookZ,
 			upX, upY,  upZ);
 
-
-
-
-	
-
 	//w³asna funckja wyœwietlaj¹ca scenê
-	displayObjects(frame_no);
+	displayObjects();
 
 	//opró¿nienie buforowanych zadañ openGL - zrób wsystko co masz do zrobienia
 	glFlush();
@@ -210,47 +354,33 @@ tutaj znajduje siê obliczanie stanu ca³ej sceny i jej rysowanie
 void idleFunc()
 {
 	static int frameTime = glutGet(GLUT_ELAPSED_TIME);
-
-	//todo wywo³anie funkcja do obliczeñ sceny i wszystkiego
-
+	calcPhysics();
 	nextFrameWait(&frameTime);
 	glutPostRedisplay();
 }
 
 /*
 funkcja wywo³ywana po naciœniêciu przycisku klawiatury
-s³u¿y do obracania kamery i manipulowania wszelkimi parametrami symulacji
+s³u¿y do obracania kamery i manipulowania parametrami symulacji
 */
 void KeyPressedFunc(unsigned char key, int kx, int ky)
 {
-		/*glViewport( 0, 0, WINDOW_WIDTH, WINDOW_HEIGHT );
-		glMatrixMode( GL_PROJECTION );
-		glLoadIdentity();
-
-		glOrtho(-2.25,2.25,-2.25,2.25,-10.0, 10.0 );
-     glMatrixMode( GL_MODELVIEW );*/
-
-		/*x = r * sin(phi) * cos(theta)
-		y = r * sin(phi) * sin(theta)
-		z = r * cos(phi)*/
-
 	switch (key)
 	{
+		//k¹ty widzenia
 		case 'q' :
 			horizontalAngle -= angleStep;
 			break;
 		case 'e' :
 			horizontalAngle += angleStep;
 			break;
-
 		case 'r' :
 			verticalAngle += angleStep;
 			break;
-
 		case 'f' :
 			verticalAngle -= angleStep;
 			break;
-
+		//pozycja kamery
 		case 'w' :
 			cameraX += lookX * step;
 			cameraY += lookY * step;
@@ -271,6 +401,57 @@ void KeyPressedFunc(unsigned char key, int kx, int ky)
 			cameraY += (lookZ*upX - lookX*upZ) * step;
 			cameraZ += (lookX*upY - lookY*upX) * step;
 			break;
+		case 't' :
+			cameraX += upX * step;
+			cameraY += upY * step;
+			cameraZ += upZ * step;
+			break;
+		case 'g' :
+			cameraX -= upX * step;
+			cameraY -= upY * step;
+			cameraZ -= upZ * step;
+			break;
+	}
+
+	//parametry mo¿na zmieniaæ tylko przed wystrza³em
+	if(!launched)
+	{
+		switch(key)
+		{
+			case 'y' :
+				r1 += 0.1;
+				break;
+			case 'h' :
+				r1 -= 0.1;
+				break;
+			case 'u' :
+				r2 += 0.1;
+				break;
+			case 'j' :
+				r2 -= 0.1;
+				break;
+			case 'i' :
+				beamAngle += 1;
+				break;
+			case 'k' :
+				beamAngle -= 1;
+				break;
+			case 'l' :
+				launched = 1;
+				break;
+			case 'z' :
+				payloadMass += 2;
+				break;
+			case 'x' :
+				payloadMass -= 2;
+				break;
+			case 'c' :
+				counterMass += 5;
+				break;
+			case 'v' :
+				counterMass -= 5;
+				break;
+		}
 	}
 
 	/*ograniczenie zmiany k¹tów widzenia*/
@@ -280,7 +461,15 @@ void KeyPressedFunc(unsigned char key, int kx, int ky)
 	if (horizontalAngle >= 2*M_PI) horizontalAngle = 0;
 	else if (horizontalAngle <= 0) horizontalAngle = 2*M_PI;
 
-	/*obliczenia wektorwa look*/
+	/*ograniczenia zmiany d³ugoœci ramion*/
+	if (r1<minr1) r1 = minr1;
+	if (r2<minr2) r2 = minr2;
+
+	/*ograniczenia beamAngle*/
+	if (beamAngle < minBeamAngle) beamAngle = minBeamAngle;
+	if (beamAngle > maxBeamAngle) beamAngle = maxBeamAngle;
+
+	/*obliczenia wektora look*/
 	lookZ = cos(verticalAngle) * sin(horizontalAngle);
 	lookX = cos(verticalAngle) * cos(horizontalAngle);
 	lookY = sin(verticalAngle);
@@ -292,42 +481,92 @@ void KeyPressedFunc(unsigned char key, int kx, int ky)
 	upY = sin(verticalAngle);
 	verticalAngle -= M_PI/2;
 
-	/*wypisywanie logów do konsoli*/
-	std::cout.precision(2);
-	std::cout<<"camera: "<<cameraX<<", "<<cameraY<<", "<<cameraZ<<"\t look: "<<lookX<<", "<<lookY<<", "<<lookZ<<"\n";
-	std::cout<<"up: "<<upX<<", "<<upY<<", "<<upZ<<"\n";
-	std::cout<<"V: "<<verticalAngle<<"\tH:"<<horizontalAngle<<"\n";
-	std::cout<<lookX*lookX+lookY*lookY+lookZ*lookZ<<"\n";
-	
+	std::cout<<"payM: "<<payloadMass<<"\tcounterM: "<<counterMass<<"\n";
 }
 
-int main(int argc, char** argv)
+/*obliczanie fizyki animacji, wywo³ywana z idleFunc*/
+void calcPhysics()
 {
-	glutInit( &argc, argv );
-	glutInitDisplayMode( GLUT_DOUBLE | GLUT_RGBA | GLUT_DEPTH );
+	static float inertia = 0;
+	static float payloadSpeedY = 0;
+	static float payloadSpeedZ = 0;
+	if (!launched)
+	{
+		//rozmiary przeciwwagi i pocisku
+		payloadSize = 0.2 + payloadMass*0.01;
+		counterSize = counterMass*0.01;
 
-	glutInitWindowPosition( 100, 100 );
-	glutInitWindowSize(WINDOW_WIDTH, WINDOW_HEIGHT);
+		//ograniczenia d³ugoœci ramienia wyrzucaj¹cego
+		minr1 = BASE_LEN*SQRT_3/2 - 5*BASE_THICK;
+		minr2 = BASE_LEN*SQRT_3/2;
 
-	glutCreateWindow( "TrebuchetGL - Kacper Stachyra 2016" );
+		//ograniczenia k¹ta ramienia wyrzucaj¹cego
+		minBeamAngle = -asin((BASE_LEN*SQRT_3/2)/(r2+counterSize/2)) * (180/M_PI);
+		maxBeamAngle = asin((BASE_LEN*SQRT_3/2)/(r1 + 10*BASE_THICK)) * (180/M_PI);
 
-	//funkcja s³u¿¹ca do odrysowania okna, uruchamiana tylko w sytuacjach, gdy okno siê zmienia (rozmiar, widocznoœæ itd.)
-	glutDisplayFunc( display );
+		inertia = (1/3)*(r1+r2)*(r1+r2)*BASE_MASS + counterMass + counterMass*r2*r2 + payloadMass + payloadMass*r1*r1;
+	}
 
-	//funkcja wywo³ywana przy zmianie rozmiaru okna
-	glutReshapeFunc( reshape );
+	else if (!thrown)
+	{
+		//dynamika bry³y sztywnej
+		static float angleSpeed = 0;
+		float sinus = sin(90-abs(beamAngle*TO_RADIAN));
+		float force = (counterMass*r2*sinus + sinus*BASE_MASS*r2/2 - payloadMass*r1*sinus -sinus*BASE_MASS*r2/2)*GRAVITY;
+		float angleAcc = force/inertia;
+		angleSpeed += angleAcc/(FRAME_RATE);
+		beamAngle-=(angleSpeed*(180/M_PI));
 
-	//funkcja wywo³ywana przy naciœniêciu klawisza zwyk³ego
-	glutKeyboardFunc( KeyPressedFunc );
+		std::cout<<"f: "<<force<<"\ti: "<<inertia<<"\ta: "<<angleAcc<<"\tv: "<<angleSpeed<<"\tbA: "<<beamAngle<<"\n";
+		if (beamAngle<=minBeamAngle || beamAngle>=maxBeamAngle)
+		{
+			if (beamAngle>=maxBeamAngle)
+			{
+				beamAngle=maxBeamAngle;
+				angleSpeed = 0;
+				launched = 0;
+			}
+			else if(beamAngle<=minBeamAngle)
+			{
+				//pobiera pozycjê kuli
+				getPayloadMatrix();
+				payloadX = mv[12]/mv[15];
+				payloadY = mv[13]/mv[15];
+				payloadZ = mv[14]/mv[15];
 
-	//funkcja wywo³ywana w stanie spoczynku
-	glutIdleFunc( idleFunc );
+				//wektor prêdkoœci kuli
+				float payloadAngle = (90 + beamAngle)*TO_RADIAN;
+				payloadSpeedY = sin(payloadAngle)*r1*angleSpeed*(180/M_PI);
+				payloadSpeedZ = cos(payloadAngle)*r1*angleSpeed*(180/M_PI);
 
-	init();
+				//zatrzymaj ramiê
+				beamAngle=minBeamAngle;
+				angleSpeed = 0;
 
-	std::cout<<FRAME_RATE<<" "<<REFRESH_TIME;
+				//zmieñ status
+				thrown = 1;
+			}
+		}
+	}
 
-	glutMainLoop();
+	else //thrown
+	{
+		if (payloadY > payloadSize/2)
+		{
+			payloadY += payloadSpeedY/FRAME_RATE;
+			payloadZ -= payloadSpeedZ/FRAME_RATE;
+			payloadSpeedY -= GRAVITY/5;
+		}
+		else if (payloadSpeedZ > 0)
+		{
+			payloadZ -= payloadSpeedZ/FRAME_RATE;
+			payloadSpeedZ -= FRICTION;
+		}
+		else
+		{
+			thrown = 0;
+			launched = 0;
+		}
 
-	return 0;
+	}
 }
