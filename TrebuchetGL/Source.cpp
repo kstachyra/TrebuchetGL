@@ -33,82 +33,65 @@
 //tarcie
 #define FRICTION 1
 
+#define FOG_DENSE 0.25
+#define FOG_START 15
+#define FOG_END 50
+
 #define M_PI 3.1415926535897932384626433832795
 #define SQRT_2 1.41421356237
 #define SQRT_3 1.73205080757
 #define TO_RADIAN 0.0174532925
 
-float step = 0.1;
-float angleStep = 0.1;
+GLfloat step = 0.1;
+GLfloat angleStep = 0.1;
 
-float verticalAngle = 0;
-float horizontalAngle = M_PI*3/2;
+GLfloat verticalAngle = 0;
+GLfloat horizontalAngle = M_PI*3/2;
 
 
-float lookX = 0, lookY = 0, lookZ = -1;
-float cameraX = 0, cameraY = 1, cameraZ = 5;
-float upX = 0, upY = 1, upZ = 0;
-float payloadX = 0, payloadY = 0, payloadZ = 0;
+GLfloat lookX = 0, lookY = 0, lookZ = -1;
+GLfloat cameraX = 0, cameraY = 1, cameraZ = 5;
+GLfloat upX = 0, upY = 1, upZ = 0;
+GLfloat payloadX = 0, payloadY = 0, payloadZ = 0;
 
 //wielkoœæ i masa pocisku
-float payloadSize = 1, payloadMass = 10;
+GLfloat payloadSize = 1, payloadMass = 10;
 //wielkoœæ i masa przeciwwagi
-float counterSize = 1, counterMass = 100;
+GLfloat counterSize = 1, counterMass = 100;
 //d³ugoœci ramienia miotaj¹cego i ograniczenia
-float r1 = 3, r2 = 2.2;
-float minr1, minr2;
+GLfloat r1 = 3, r2 = 2.2;
+GLfloat minr1, minr2;
 //kat obrotu ramienia miotaj¹cego w stopniach(!) i ograniczenia
-float beamAngle = 0;
-float minBeamAngle;
-float maxBeamAngle;
+GLfloat beamAngle = 0;
+GLfloat minBeamAngle;
+GLfloat maxBeamAngle;
 
 bool thrown = 0;
 bool launched = 0;
+bool fogOn = 0;
 
-float mv[16];
+GLfloat mv[16];
+GLuint grassTex, stoneTex, woodTex;
 
+GLfloat lightIntens = 0.3;
+GLfloat lightPos = 0;
 
-
-/*funkcja inicjuj¹ca, w³¹cza potrzebne funkcje openGL, uruchamiana raz*/
 void init();
-
-/*funkcja wyœwietlaj¹ca klatkê, wywo³yje funkcje rysowania, zamienia bufory, ustawia macierz VIEW itd.*/
-void display();
-
-/*funkcja zapewniaj¹ca poprawnoœæ przy zmianie rozmiaru okna, tworzy poprawn¹ macierz PROJECTION*/
 void reshape(GLsizei w, GLsizei h);
+void display();
+	void displayObjects();
+		void drawTrebuchet();
+		void drawPayload();
+	void displayLight(GLfloat intens);
+	void displayFog();
 
-/*rysowanie wszystkich obiektów - wywo³uje drawTrebuchet, drawPayload*/
-void displayObjects(int frame_no);
-	/*rysowanie trebusza*/
-	void drawTrebuchet();
-	/*rysowanie pocisku*/
-	void drawPayload();
-
-/*funkcja s³u¿¹ca do "odzyskiwania" macierzy MODEL dla przekszta³ceñ pocisku, powtórzone przekszta³cenia macierzy z funkcji
-drawPayload, z wy³¹czeniem macierzy VIEW (gluLookAt), wywo³ywana raz, gdy potrzebna - wa¿ne, pilnowaæ takich samych przekszta³ceñ!*/
-void getPayloadMatrix();
-
-/*
-wywo³anie funkcji nexFrameWait powoduje zawieszenie programu do momentu, a¿ od ostatniego wywo³ania tej funkcji minie REFRESH_TIME
-do wywo³ywania przed funkcj¹ glutPostRedisplay();
-*/
+void KeyPressedFunc(unsigned char key, int kx, int ky);
+void idleFunc();
 void nextFrameWait(int* frameTime);
 
-/*
-funkcja wywo³ywana w pêtli, gdy nie ma nic innego do zrobienia
-tutaj znajduje siê obliczanie stanu ca³ej sceny i jej rysowanie
-*/
-void idleFunc();
-
-/*obliczanie fizyki animacji, wywo³ywana z idleFunc*/
+void getPayloadMatrix();
 void calcPhysics();
-
-/*
-funkcja wywo³ywana po naciœniêciu przycisku klawiatury
-s³u¿y do obracania kamery i manipulowania parametrami symulacji
-*/
-void KeyPressedFunc(unsigned char key, int kx, int ky);
+void drawBox(GLfloat size, GLenum type);
 
 int main(int argc, char** argv)
 {
@@ -149,6 +132,7 @@ void init()
 	glMaterialfv( GL_FRONT, GL_AMBIENT, mat_ambient );
 	glMaterialfv( GL_FRONT, GL_SPECULAR, mat_specular );
 	glMaterialf( GL_FRONT, GL_SHININESS, 50.0 );
+
 	glLightfv( GL_LIGHT0, GL_POSITION, light_position );
 	glLightModelfv( GL_LIGHT_MODEL_AMBIENT, lm_ambient );
     
@@ -159,136 +143,39 @@ void init()
 
 	glDepthFunc( GL_LESS );
 	glEnable( GL_DEPTH_TEST );
+	glEnable(GL_TEXTURE_2D);
+
+	//³adowanie tekstur trawy, drewna i kamienia
+	grassTex = SOIL_load_OGL_texture("textures/grass.tga", SOIL_LOAD_AUTO, SOIL_CREATE_NEW_ID, SOIL_FLAG_MIPMAPS | SOIL_FLAG_INVERT_Y | SOIL_FLAG_COMPRESS_TO_DXT);
+	stoneTex = SOIL_load_OGL_texture("textures/stone.tga", SOIL_LOAD_AUTO, SOIL_CREATE_NEW_ID, SOIL_FLAG_MIPMAPS | SOIL_FLAG_INVERT_Y | SOIL_FLAG_COMPRESS_TO_DXT);
+	woodTex = SOIL_load_OGL_texture("textures/wood.tga", SOIL_LOAD_AUTO, SOIL_CREATE_NEW_ID, SOIL_FLAG_MIPMAPS | SOIL_FLAG_INVERT_Y | SOIL_FLAG_COMPRESS_TO_DXT);
+
+	/*//³adowanie tekstur skyboxa
+	skybox[0] = SOIL_load_OGL_texture("textures/forward.tga", SOIL_LOAD_AUTO, SOIL_CREATE_NEW_ID, SOIL_FLAG_MIPMAPS | SOIL_FLAG_INVERT_Y | SOIL_FLAG_COMPRESS_TO_DXT);
+	skybox[1] = SOIL_load_OGL_texture("textures/backward.tga", SOIL_LOAD_AUTO, SOIL_CREATE_NEW_ID, SOIL_FLAG_MIPMAPS | SOIL_FLAG_INVERT_Y | SOIL_FLAG_COMPRESS_TO_DXT);
+	skybox[2] = SOIL_load_OGL_texture("textures/left.tga", SOIL_LOAD_AUTO, SOIL_CREATE_NEW_ID, SOIL_FLAG_MIPMAPS | SOIL_FLAG_INVERT_Y | SOIL_FLAG_COMPRESS_TO_DXT);
+	skybox[3] = SOIL_load_OGL_texture("textures/right.tga", SOIL_LOAD_AUTO, SOIL_CREATE_NEW_ID, SOIL_FLAG_MIPMAPS | SOIL_FLAG_INVERT_Y | SOIL_FLAG_COMPRESS_TO_DXT);
+	skybox[4] = SOIL_load_OGL_texture("textures/up.tga", SOIL_LOAD_AUTO, SOIL_CREATE_NEW_ID, SOIL_FLAG_MIPMAPS | SOIL_FLAG_INVERT_Y | SOIL_FLAG_COMPRESS_TO_DXT);*/
+
+	//niebo
+	glClearColor(0.7f, 0.9f, 1.0f, 1.0f);
 }
 
-void drawTrebuchet()
+void reshape(GLsizei w, GLsizei h)
 {
-	//lewa podstawa z ³¹czeniami
-	glPushMatrix();
-	glTranslatef(-TREB_WID/2, BASE_LEN*SQRT_3/2 + BASE_THICK, 0);
-	glRotatef(60, 1, 0, 0);
+	//"blokowanie" zmiany rozmiaru okna
+	/*glutReshapeWindow(WINDOW_WIDTH, WINDOW_HEIGHT);*/
 
-	GLUquadric *quadric = gluNewQuadric();
-	gluCylinder(quadric, BASE_THICK, BASE_THICK, BASE_LEN, 16, 5);
-	glTranslatef(0, 0, BASE_LEN);
-	gluSphere(quadric, BASE_THICK, 16, 5);
-	glTranslatef(0, 0, -BASE_LEN);
-
-	glRotatef(60, 1, 0, 0);
-	gluSphere(quadric, BASE_THICK, 16, 5);
-	gluCylinder(quadric, BASE_THICK, BASE_THICK, BASE_LEN, 16, 5);
-	gluSphere(quadric, BASE_THICK, 16, 5);
-	glTranslatef(0, 0, BASE_LEN);
-	gluSphere(quadric, BASE_THICK, 16, 5);
-	glPopMatrix();
-
-	//prawa podstawa z ³¹czeniami
-	glPushMatrix();
-	glTranslatef(TREB_WID/2, BASE_LEN*SQRT_3/2 + BASE_THICK, 0);
-	glRotatef(60, 1, 0, 0);
-
-	gluCylinder(quadric, BASE_THICK, BASE_THICK, BASE_LEN, 16, 5);
-	glTranslatef(0, 0, BASE_LEN);
-	gluSphere(quadric, BASE_THICK, 16, 5);
-	glTranslatef(0, 0, -BASE_LEN);
-
-	glRotatef(60, 1, 0, 0);
-	gluSphere(quadric, BASE_THICK, 16, 5);
-	gluCylinder(quadric, BASE_THICK, BASE_THICK, BASE_LEN, 16, 5);
-	gluSphere(quadric, BASE_THICK, 16, 5);
-	glTranslatef(0, 0, BASE_LEN);
-	gluSphere(quadric, BASE_THICK, 16, 5);
-	glPopMatrix();
-
-	//belka poprzeczna
-	glPushMatrix();
-	glTranslatef(0, BASE_LEN*SQRT_3/2 + BASE_THICK, 0);
-	glRotatef(90, 0, 1, 0);
-	glTranslatef(0, 0, -TREB_WID/2);
-	gluCylinder(quadric, BASE_THICK, BASE_THICK, TREB_WID, 16, 5);
-	glPopMatrix();
-
-	//ramiê wyrzucaj¹ce
-	glPushMatrix();
-	glTranslatef(0, BASE_LEN*SQRT_3/2 + BASE_THICK, 0);
-	glRotatef(beamAngle, 1, 0, 0);
-	glTranslatef(0, 0, -r2);
-		//³ycha wyrzucaj¹ca
-		glTranslatef(0, 0, +r1+r2);
-		//glutSolidTeapot(5*BASE_THICK);
-		const float throwSize = 5*BASE_THICK;
-		gluSphere(quadric, BASE_THICK, 16, 5);	//zakoñczenie ramienia
-		glTranslatef(0, 0, throwSize);		//przesuniêcie na sam koniec ramienia
-		glBegin(GL_QUADS);					//element wyrzucaj¹cy
-			glVertex3f(-throwSize, 0, -throwSize);
-			glVertex3f(-throwSize, 0, throwSize);
-			glVertex3f(throwSize, 0, throwSize);
-			glVertex3f(throwSize, 0, -throwSize);
-		glEnd();
-		glTranslatef(0, 0, -r1-r2-throwSize);	//"powrót" macierzy
-		//przeciwwaga
-		glTranslatef(0, counterSize/2, 0);
-		glutSolidCube(counterSize);
-		glTranslatef(0, -counterSize/2, 0);
-		//ramiê
-		gluCylinder(quadric, BASE_THICK, BASE_THICK, r1 + r2, 16, 5);
-	glPopMatrix();
-}
-
-void drawPayload()
-{
-	if(!thrown)
-	{
-		GLUquadric *quadric = gluNewQuadric();
-		glPushMatrix();
-	
-		glTranslatef(0, BASE_LEN*SQRT_3/2 + BASE_THICK, 0);
-		glRotatef(beamAngle, 1, 0, 0);
-		glTranslatef(0, 0, -r2);
-		glTranslatef(0, payloadSize,  5*BASE_THICK+r1+r2);
-	
-		gluSphere(quadric, payloadSize, 16, 5);
-		glPopMatrix();
-	}
-	else
-	{
-		GLUquadric *quadric = gluNewQuadric();
-		glPushMatrix();
-		glTranslatef(0, payloadY, payloadZ);
-		gluSphere(quadric, payloadSize, 16, 5);
-		glPopMatrix();
-	}
-}
-
-/*funkcja s³u¿¹ca do "odzyskiwania" macierzy MODEL dla przekszta³ceñ pocisku, powtórzone przekszta³cenia macierzy z funkcji
-drawPayload, z wy³¹czeniem macierzy VIEW (gluLookAt), wywo³ywana raz, gdy potrzebna - wa¿ne, pilnowaæ takiego sameo kodu jw.*/
-void getPayloadMatrix()
-{
-	glPushMatrix();
+	//ustawianie vieport i perspektywy widoku wzglêdem rozmiaru okna
+	GLfloat ratio = w * 1.0 / h;
+	glMatrixMode(GL_PROJECTION);
 	glLoadIdentity();
-	glTranslatef(0, BASE_LEN*SQRT_3/2 + BASE_THICK, 0);
-	glRotatef(beamAngle, 1, 0, 0);
-	glTranslatef(0, 0, -r2);
-	glTranslatef(0, payloadSize,  5*BASE_THICK+r1+r2);
-	glGetFloatv(GL_MODELVIEW_MATRIX, mv);
-	glPopMatrix();
+	glViewport(0, 0, w, h);
+	gluPerspective(45.0f, ratio, 0.1f, 100.0f);
+	glMatrixMode(GL_MODELVIEW);
 }
 
-
-void displayObjects()
-{
-	drawTrebuchet();
-	drawPayload();
-
-	//pod³o¿e
-	glBegin(GL_QUADS);
-		glVertex3f(-100, 0, -100);
-		glVertex3f(-100, 0, 100);
-		glVertex3f(100, 0, 100);
-		glVertex3f(100, 0, -100);
-	glEnd();
-}
-
+/*wyœwietlanie sceny, zerowanie buferów, prze³¹czanie ich itd.*/
 void display()
 {
 	//czyszczenie bufora koloru i bufora g³êbokoœci, by namalowaæ nowe
@@ -297,10 +184,14 @@ void display()
 	//zerowanie macierzy MODELVIEW, na wszelki wypadek
 	glLoadIdentity();
 	
-	//ustawienie "kamery"
+	//ustawienie kamery
 	gluLookAt(cameraX, cameraY, cameraZ,
 			cameraX+lookX, cameraY+lookY, cameraZ+lookZ,
 			upX, upY,  upZ);
+
+	/*œwiat³¹ i mg³a*/
+	displayLight(lightIntens);
+	displayFog();
 
 	//w³asna funckja wyœwietlaj¹ca scenê
 	displayObjects();
@@ -312,51 +203,219 @@ void display()
 	glutSwapBuffers();
 }
 
-void reshape(GLsizei w, GLsizei h)
+/*rysowanie obiektów*/
+void displayObjects()
 {
-	//"blokowanie" zmiany rozmiaru okna
-	/*glutReshapeWindow(WINDOW_WIDTH, WINDOW_HEIGHT);*/
+	drawTrebuchet();
+	drawPayload();
 
-	//ustawianie vieport i perspektywy widoku wzglêdem rozmiaru okna
-	float ratio = w * 1.0 / h;
-	glMatrixMode(GL_PROJECTION);
-	glLoadIdentity();
-	glViewport(0, 0, w, h);
-	gluPerspective(45.0f, ratio, 0.1f, 100.0f);
-	glMatrixMode(GL_MODELVIEW);
-}
+	//pod³o¿e
+	glBindTexture (GL_TEXTURE_2D, grassTex);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
 
-/*
-wywo³anie funkcji nexFrameWait powoduje zawieszenie programu do momentu, a¿ od ostatniego wywo³ania tej funkcji minie REFRESH_TIME
-do wywo³ywania przed funkcj¹ glutPostRedisplay();
-*/
-void nextFrameWait(int* frameTime)
-{
-	/*wersja z aktywnym oczekiwaniem
-	while (glutGet(GLUT_ELAPSED_TIME) - *frameTime < REFRESH_TIME);
-	*frameTime = glutGet(GLUT_ELAPSED_TIME);
-	*/
+	/*wersja z jednym du¿ym kwadratem - problem z mg³¹, œwiat³o dzia³a lepiej (tajemnicze Ÿród³o œwiat³a...)*/
+	/*glBegin(GL_QUADS);
+		glTexCoord2i(0,0);
+		glVertex3f(-10, 0, -10);
+		glTexCoord2i(0,64);
+		glVertex3f(-10, 0, 10);
+		glTexCoord2i(64,64);
+		glVertex3f(10, 0, 10);
+		glTexCoord2i(64,0);
+		glVertex3f(10, 0, -10);
+	glEnd();*/
 
-	/*wersja ze Sleep pomiêdzy klatkami*/
-	int toWait = REFRESH_TIME - (glutGet(GLUT_ELAPSED_TIME) - *frameTime);
-	if (toWait>0)
+	/*wersja z wieloma kwadratami - mg³a dzia³a doskonale, dziwne zachowanie œwiat³a (tajemnicze Ÿród³o œwiat³a*/
+	for (int i=-10; i<=10; ++i)
 	{
-		Sleep(toWait);
+		for (int j=-10; j<=10; ++j)
+		{
+			glBegin(GL_QUADS);
+				glTexCoord2i(0,0);
+				glVertex3f(i*10, 0, j*10);
+				glTexCoord2i(0,1);
+				glVertex3f(i*10+10, 0, j*10);
+				glTexCoord2i(1,1);
+				glVertex3f(i*10+10, 0, j*10+10);
+				glTexCoord2i(1,0);
+				glVertex3f(i*10, 0, j*10+10);
+			glEnd();
+		}
+	}
+}
+	void drawTrebuchet()
+	{
+		//lewa podstawa z ³¹czeniami
+		GLUquadric *quadric = gluNewQuadric(); 
+		gluQuadricTexture(quadric, GL_TRUE);      // Create Texture Coords  
+		gluQuadricNormals(quadric, GLU_SMOOTH);   // Create Smooth Normals 
+
+		glBindTexture (GL_TEXTURE_2D, woodTex);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+
+		glPushMatrix();
+		glTranslatef(-TREB_WID/2, BASE_LEN*SQRT_3/2 + BASE_THICK, 0);
+		glRotatef(60, 1, 0, 0);
+
+		gluCylinder(quadric, BASE_THICK, BASE_THICK, BASE_LEN, 16, 5);
+		glTranslatef(0, 0, BASE_LEN);
+		gluSphere(quadric, BASE_THICK, 16, 5);
+		glTranslatef(0, 0, -BASE_LEN);
+
+		glRotatef(60, 1, 0, 0);
+		gluSphere(quadric, BASE_THICK, 16, 5);
+		gluCylinder(quadric, BASE_THICK, BASE_THICK, BASE_LEN, 16, 5);
+		gluSphere(quadric, BASE_THICK, 16, 5);
+		glTranslatef(0, 0, BASE_LEN);
+		gluSphere(quadric, BASE_THICK, 16, 5);
+		glPopMatrix();
+
+		//prawa podstawa z ³¹czeniami
+		glPushMatrix();
+		glTranslatef(TREB_WID/2, BASE_LEN*SQRT_3/2 + BASE_THICK, 0);
+		glRotatef(60, 1, 0, 0);
+
+		gluCylinder(quadric, BASE_THICK, BASE_THICK, BASE_LEN, 16, 5);
+		glTranslatef(0, 0, BASE_LEN);
+		gluSphere(quadric, BASE_THICK, 16, 5);
+		glTranslatef(0, 0, -BASE_LEN);
+
+		glRotatef(60, 1, 0, 0);
+		gluSphere(quadric, BASE_THICK, 16, 5);
+		gluCylinder(quadric, BASE_THICK, BASE_THICK, BASE_LEN, 16, 5);
+		gluSphere(quadric, BASE_THICK, 16, 5);
+		glTranslatef(0, 0, BASE_LEN);
+		gluSphere(quadric, BASE_THICK, 16, 5);
+		glPopMatrix();
+
+		//belka poprzeczna
+		glPushMatrix();
+		glTranslatef(0, BASE_LEN*SQRT_3/2 + BASE_THICK, 0);
+		glRotatef(90, 0, 1, 0);
+		glTranslatef(0, 0, -TREB_WID/2);
+		gluCylinder(quadric, BASE_THICK, BASE_THICK, TREB_WID, 16, 5);
+		glPopMatrix();
+
+		//ramiê wyrzucaj¹ce
+		glPushMatrix();
+		glTranslatef(0, BASE_LEN*SQRT_3/2 + BASE_THICK, 0);
+		glRotatef(beamAngle, 1, 0, 0);
+		glTranslatef(0, 0, -r2);
+			//³ycha wyrzucaj¹ca
+			glTranslatef(0, 0, +r1+r2);
+			const GLfloat throwSize = 5*BASE_THICK;
+			gluSphere(quadric, BASE_THICK, 16, 5);	//zakoñczenie ramienia
+			glTranslatef(0, 0, throwSize);		//przesuniêcie na sam koniec ramienia
+
+			glBindTexture (GL_TEXTURE_2D, woodTex);
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+			glBegin(GL_QUADS);					//element wyrzucaj¹cy
+				glTexCoord2i(1,0);
+				glVertex3f(-throwSize, 0, -throwSize);
+				glTexCoord2i(1,1);
+				glVertex3f(-throwSize, 0, throwSize);
+				glTexCoord2i(0,1);
+				glVertex3f(throwSize, 0, throwSize);
+				glTexCoord2i(0,0);
+				glVertex3f(throwSize, 0, -throwSize);
+			glEnd();
+			glTranslatef(0, 0, -r1-r2-throwSize);	//"powrót" macierzy
+			//przeciwwaga
+			glTranslatef(0, counterSize/2, 0);
+			drawBox(counterSize, GL_QUADS);
+			glTranslatef(0, -counterSize/2, 0);
+			//ramiê
+			gluCylinder(quadric, BASE_THICK, BASE_THICK, r1 + r2, 16, 5);
+		glPopMatrix();
+	}
+	void drawPayload()
+	{
+		if(!thrown)
+		{
+			GLUquadric *quadric = gluNewQuadric(); 
+			gluQuadricTexture(quadric, GL_TRUE);      // Create Texture Coords  
+			gluQuadricNormals(quadric, GLU_SMOOTH);   // Create Smooth Normals 
+
+			glBindTexture (GL_TEXTURE_2D, stoneTex);
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+
+			glPushMatrix();
+	
+			glTranslatef(0, BASE_LEN*SQRT_3/2 + BASE_THICK, 0);
+			glRotatef(beamAngle, 1, 0, 0);
+			glTranslatef(0, 0, -r2);
+			glTranslatef(0, payloadSize,  5*BASE_THICK+r1+r2);
+	
+			gluSphere(quadric, payloadSize, 16, 5);
+			glPopMatrix();
+		}
+		else
+		{
+			GLUquadric *quadric = gluNewQuadric(); 
+			gluQuadricTexture(quadric, GL_TRUE); 
+			gluQuadricNormals(quadric, GLU_SMOOTH);
+
+			glBindTexture (GL_TEXTURE_2D, stoneTex);
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+
+			glPushMatrix();
+			glTranslatef(0, payloadY, payloadZ);
+			gluSphere(quadric, payloadSize, 16, 5);
+			glPopMatrix();
+		}
 	}
 
-	*frameTime = glutGet(GLUT_ELAPSED_TIME);
+/*uruchamianie œwiat³a ze zmienn¹ intensywnoœci¹ i po³o¿eniem*/
+void displayLight(GLfloat intens)
+{
+	glDisable(GL_LIGHT0);
+	GLfloat light_position[] = { sin(lightPos)*10, 10 ,cos(lightPos)*10 , 1.0 };
+	GLfloat lm_ambient[]     = { intens, intens,  0, 1.0 };
+	//glLightf(GL_LIGHT0, GL_CONSTANT_ATTENUATION, 0.5);
+	glLightfv( GL_LIGHT0, GL_POSITION, light_position );
+	glLightModelfv( GL_LIGHT_MODEL_AMBIENT, lm_ambient );
+	glEnable( GL_LIGHT0 );
 }
 
-/*
-funkcja wywo³ywana w pêtli, gdy nie ma nic innego do zrobienia
-tutaj znajduje siê obliczanie stanu ca³ej sceny i jej rysowanie
-*/
-void idleFunc()
+/*uruchamianie mg³y*/
+void displayFog()
 {
-	static int frameTime = glutGet(GLUT_ELAPSED_TIME);
-	calcPhysics();
-	nextFrameWait(&frameTime);
-	glutPostRedisplay();
+	if (fogOn)
+	{
+		glPushMatrix();
+		GLfloat fogColor[4]= {0.5f, 0.5f, 0.5f, 1.0f};
+		glClearColor(0.5f,0.5f,0.5f,1.0f);
+		glFogi(GL_FOG_MODE, GL_LINEAR);
+		glFogfv(GL_FOG_COLOR, fogColor);
+		glFogf(GL_FOG_DENSITY, FOG_DENSE);
+		glHint(GL_FOG_HINT, GL_DONT_CARE); //czy wierzcho³ki czy œcianki - obojêtnie
+		glFogf(GL_FOG_START,FOG_START);
+		glFogf(GL_FOG_END, FOG_END);
+		glEnable(GL_FOG);
+		glPopMatrix();
+	}
+	else
+	{
+		//wy³¹cz mg³ê
+		glDisable(GL_FOG);
+		//ustaw niebo
+		glClearColor(0.7f, 0.9f, 1.0f, 1.0f);
+	}
 }
 
 /*
@@ -410,6 +469,22 @@ void KeyPressedFunc(unsigned char key, int kx, int ky)
 			cameraX -= upX * step;
 			cameraY -= upY * step;
 			cameraZ -= upZ * step;
+			break;
+		case 'b' :
+			lightIntens+=0.1;
+			break;
+		case 'n' :
+			lightIntens-=0.1;
+			break;
+		case 'm' :
+			if(fogOn == 1) fogOn = 0;
+			else fogOn = 1;
+			break;
+		case 'o':
+			lightPos+=0.1;
+			break;
+		case 'p':
+			lightPos-=0.1;
 			break;
 	}
 
@@ -484,12 +559,59 @@ void KeyPressedFunc(unsigned char key, int kx, int ky)
 	std::cout<<"payM: "<<payloadMass<<"\tcounterM: "<<counterMass<<"\n";
 }
 
+/*
+funkcja wywo³ywana w pêtli, gdy nie ma nic innego do zrobienia
+tutaj znajduje siê obliczanie stanu ca³ej sceny i jej rysowanie
+*/
+void idleFunc()
+{
+	static int frameTime = glutGet(GLUT_ELAPSED_TIME);
+	calcPhysics();
+	nextFrameWait(&frameTime);
+	glutPostRedisplay();
+}
+
+/*
+wywo³anie funkcji nexFrameWait powoduje zawieszenie programu do momentu, a¿ od ostatniego wywo³ania tej funkcji minie REFRESH_TIME
+do wywo³ywania przed funkcj¹ glutPostRedisplay();
+*/
+void nextFrameWait(int* frameTime)
+{
+	/*wersja z aktywnym oczekiwaniem
+	while (glutGet(GLUT_ELAPSED_TIME) - *frameTime < REFRESH_TIME);
+	*frameTime = glutGet(GLUT_ELAPSED_TIME);
+	*/
+
+	/*wersja ze Sleep pomiêdzy klatkami*/
+	int toWait = REFRESH_TIME - (glutGet(GLUT_ELAPSED_TIME) - *frameTime);
+	if (toWait>0)
+	{
+		Sleep(toWait);
+	}
+
+	*frameTime = glutGet(GLUT_ELAPSED_TIME);
+}
+
+/*funkcja s³u¿¹ca do "odzyskiwania" macierzy MODEL dla przekszta³ceñ pocisku, powtórzone przekszta³cenia macierzy z funkcji
+drawPayload, z wy³¹czeniem macierzy VIEW (gluLookAt), wywo³ywana raz, gdy potrzebna - wa¿ne, pilnowaæ takiego sameo kodu jaj w drawPayload()*/
+void getPayloadMatrix()
+{
+	glPushMatrix();
+	glLoadIdentity();
+	glTranslatef(0, BASE_LEN*SQRT_3/2 + BASE_THICK, 0);
+	glRotatef(beamAngle, 1, 0, 0);
+	glTranslatef(0, 0, -r2);
+	glTranslatef(0, payloadSize,  5*BASE_THICK+r1+r2);
+	glGetFloatv(GL_MODELVIEW_MATRIX, mv);
+	glPopMatrix();
+}
+
 /*obliczanie fizyki animacji, wywo³ywana z idleFunc*/
 void calcPhysics()
 {
-	static float inertia = 0;
-	static float payloadSpeedY = 0;
-	static float payloadSpeedZ = 0;
+	static GLfloat inertia = 0;
+	static GLfloat payloadSpeedY = 0;
+	static GLfloat payloadSpeedZ = 0;
 	if (!launched)
 	{
 		//rozmiary przeciwwagi i pocisku
@@ -510,10 +632,10 @@ void calcPhysics()
 	else if (!thrown)
 	{
 		//dynamika bry³y sztywnej
-		static float angleSpeed = 0;
-		float sinus = sin(90-abs(beamAngle*TO_RADIAN));
-		float force = (counterMass*r2*sinus + sinus*BASE_MASS*r2/2 - payloadMass*r1*sinus -sinus*BASE_MASS*r2/2)*GRAVITY;
-		float angleAcc = force/inertia;
+		static GLfloat angleSpeed = 0;
+		GLfloat sinus = sin(90-abs(beamAngle*TO_RADIAN));
+		GLfloat force = (counterMass*r2*sinus + sinus*BASE_MASS*r2/2 - payloadMass*r1*sinus -sinus*BASE_MASS*r2/2)*GRAVITY;
+		GLfloat angleAcc = force/inertia;
 		angleSpeed += angleAcc/(FRAME_RATE);
 		beamAngle-=(angleSpeed*(180/M_PI));
 
@@ -535,7 +657,7 @@ void calcPhysics()
 				payloadZ = mv[14]/mv[15];
 
 				//wektor prêdkoœci kuli
-				float payloadAngle = (90 + beamAngle)*TO_RADIAN;
+				GLfloat payloadAngle = (90 + beamAngle)*TO_RADIAN;
 				payloadSpeedY = sin(payloadAngle)*r1*angleSpeed*(180/M_PI);
 				payloadSpeedZ = cos(payloadAngle)*r1*angleSpeed*(180/M_PI);
 
@@ -568,5 +690,52 @@ void calcPhysics()
 			launched = 0;
 		}
 
+	}
+}
+
+/*zmodyfikowana do w³asnych potrzeb funkcja rysuj¹ca szeœcian z biblioteki glut - rysuje przeciwwagê*/
+void drawBox(GLfloat size, GLenum type)
+{
+	static GLfloat n[6][3] =
+	{
+		{-1.0, 0.0, 0.0},
+		{0.0, 1.0, 0.0},
+		{1.0, 0.0, 0.0},
+		{0.0, -1.0, 0.0},
+		{0.0, 0.0, 1.0},
+		{0.0, 0.0, -1.0}
+	};
+	static GLint faces[6][4] =
+	{
+		{0, 1, 2, 3},
+		{3, 2, 6, 7},
+		{7, 6, 5, 4},
+		{4, 5, 1, 0},
+		{5, 6, 2, 1},
+		{7, 4, 0, 3}
+	};
+	GLfloat v[8][3];
+	GLint i;
+
+	v[0][0] = v[1][0] = v[2][0] = v[3][0] = -size / 4;
+	v[4][0] = v[5][0] = v[6][0] = v[7][0] = size / 4;
+	v[0][1] = v[1][1] = v[4][1] = v[5][1] = -size / 2;
+	v[2][1] = v[3][1] = v[6][1] = v[7][1] = size / 2;
+	v[0][2] = v[3][2] = v[4][2] = v[7][2] = -size / 2;
+	v[1][2] = v[2][2] = v[5][2] = v[6][2] = size / 2;
+
+	for (i = 5; i >= 0; i--)
+	{
+		glBegin(type);
+		glNormal3fv(&n[i][0]);
+		glTexCoord2i(0,0);
+		glVertex3fv(&v[faces[i][0]][0]);
+		glTexCoord2i(1,0);
+		glVertex3fv(&v[faces[i][1]][0]);
+		glTexCoord2i(1,1);
+		glVertex3fv(&v[faces[i][2]][0]);
+		glTexCoord2i(0,1);
+		glVertex3fv(&v[faces[i][3]][0]);
+		glEnd();
 	}
 }
